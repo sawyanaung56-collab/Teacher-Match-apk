@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:image_picker/image_picker.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,8 +57,164 @@ class TeacherMatchApp extends StatelessWidget {
 // =========================================================================
 // 1. HOME SCREEN (ပင်မစာမျက်နှာ)
 // =========================================================================
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    checkForUpdate();
+  }
+
+  // ၁။ Update စစ်မယ့် Function
+  Future<void> checkForUpdate({bool isManualCheck = false}) async {
+    try {
+      PackageInfo packageInfo = await PackageInfo.fromPlatform();
+      String currentVersion = packageInfo.version;
+
+      final response = await Supabase.instance.client
+          .from('app_versions')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(1)
+          .single();
+
+      String latestVersion = response['version_number'];
+      String downloadUrl = response['download_url'];
+
+      if (currentVersion != latestVersion) {
+        if (mounted) {
+          // Version အဟောင်းနဲ့ အသစ်ပါ Dialog ထံ ပို့ပေးပါမည်
+          showUpdateDialog(downloadUrl, currentVersion, latestVersion);
+        }
+      } else {
+        if (isManualCheck && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("နောက်ဆုံး Version ဖြစ်နေပါပြီဗျ")),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Update စစ်တဲ့အခါ Error တက်နေပါတယ်: $e");
+    }
+  }
+
+  // ၂။ Noti Box ပြမယ့် Function (Size ကို ကျစ်ကျစ်လစ်လစ်ဖြစ်အောင် ပြင်ထားပါသည်)
+  // ၂။ Noti Box ပြမယ့် Function (Dynamic Version ပါဝင်အောင် ပြင်ဆင်ထားပါသည်)
+  void showUpdateDialog(String url, String currentVer, String latestVer) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 450),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00796B).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.system_update,
+                          color: Color(0xFF00796B),
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        "Update App",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1A1A4B),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ဒီနေရာမှာ Version စာသားများ အလိုအလျောက် လိုက်ပြောင်းသွားပါမည်
+                  Text(
+                    "ယခုအသုံးပြုနေသော ဗားရှင်းမှာ V $currentVer ဖြစ်ပါသည်။\n\nဗားရှင်းအသစ် (V $latestVer) ထွက်ရှိနေပါပြီ။ ပိုကောင်းမွန်သော စနစ်များကို အသုံးပြုနိုင်ရန် အောက်ပါခလုတ်ကို နှိပ်၍ ဆက်လက် ဒေါင်းလုဒ်ရယူနိုင်ပါသည်။",
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.5,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text(
+                          "ပိတ်မည်",
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00796B),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 10,
+                          ),
+                          elevation: 0,
+                        ),
+                        onPressed: () async {
+                          final Uri downloadUri = Uri.parse(url);
+                          if (await canLaunchUrl(downloadUri)) {
+                            await launchUrl(
+                              downloadUri,
+                              mode: LaunchMode.externalApplication,
+                            );
+                          }
+                        },
+                        child: const Text(
+                          "ဒေါင်းလုဒ်ဆွဲမည်",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -219,62 +378,7 @@ class HomeScreen extends StatelessWidget {
                   Icons.download,
                   "Update APP",
                   const Color(0xFF00796B),
-                  () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        title: const Row(
-                          children: [
-                            Icon(Icons.system_update, color: Color(0xFF00796B)),
-                            SizedBox(width: 10),
-                            Text(
-                              'Update App',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        content: const Text(
-                          'ယခုအသုံးပြုနေသော ဗားရှင်းမှာ V 1.0.0 ဖြစ်ပါသည်။\n\nဗားရှင်းအသစ် ထွက်ရှိပါက အောက်ပါခလုတ်ကိုနှိပ်၍ ဆက်လက် ဒေါင်းလုဒ်ရယူနိုင်ပါသည်။',
-                          style: TextStyle(height: 1.5, fontSize: 14),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text(
-                              'ပိတ်မည်',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00796B),
-                            ),
-                            onPressed: () {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Update လင့်ခ် ချိတ်ဆက်ရန် လိုအပ်ပါသည်',
-                                  ),
-                                  backgroundColor: Colors.blueGrey,
-                                ),
-                              );
-                            },
-                            child: const Text(
-                              'ဒေါင်းလုဒ်ဆွဲမည်',
-                              style: TextStyle(color: Colors.white),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                  () => checkForUpdate(isManualCheck: true),
                   width: double.infinity,
                   height: 50,
                   textColor: Colors.white,
@@ -366,6 +470,53 @@ class _TeacherScreenState extends State<TeacherScreen> {
   bool isRegisterView = false;
   bool isEditMode = false;
   int activeTab = 0;
+  // ၁။ လျှောက်ထားပြီးပြီလား Supabase မှာ စစ်ပေးမည့် Function
+  Future<bool> checkIfAlreadyApplied(int jobId, int? tutorId) async {
+    if (tutorId == null) return false;
+    try {
+      final response = await Supabase.instance.client
+          .from('job_applications')
+          .select()
+          .eq('job_id', jobId)
+          .eq('tutor_id', tutorId);
+
+      return response.isNotEmpty;
+    } catch (e) {
+      debugPrint("Error checking application: $e");
+      return false;
+    }
+  }
+
+  // ၂။ "လျှောက်ထားမည်" နှိပ်ရင် Supabase ထဲ သွားထည့်မည့် Function
+  Future<void> applyJob(int jobId, int? tutorId) async {
+    if (tutorId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ကျေးဇူးပြု၍ အရင်ဆုံး Login ဝင်ပေးပါဗျ'),
+          ),
+        );
+      }
+      return;
+    }
+    try {
+      await Supabase.instance.client.from('job_applications').insert({
+        'job_id': jobId,
+        'tutor_id': tutorId,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+
+      setState(() {}); // UI ကို အလိုအလျောက် ပြောင်းလဲပေးရန်
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('လျှောက်ထားမှု အဆင်ပြေပါသည်')),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error applying job: $e");
+    }
+  }
 
   final userCtrl = TextEditingController();
   final passCtrl = TextEditingController();
@@ -414,14 +565,17 @@ class _TeacherScreenState extends State<TeacherScreen> {
 
   Future<void> pickAndUploadPhoto() async {
     try {
-      final result = await FilePicker.platform.pickFiles(type: FileType.image);
-      if (result != null && result.files.single.bytes != null) {
-        final fileBytes = result.files.single.bytes!;
+      final ImagePicker picker = ImagePicker();
+      // ပုံအရွယ်အစားကို ချုံ့ရန် imageQuality: 25 ကို သုံးထားပါသည်
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 25,
+      );
 
+      if (image != null) {
+        final fileBytes = await image.readAsBytes();
         final base64Image = base64Encode(fileBytes);
-        final ext = result.files.single.extension?.toLowerCase() == 'png'
-            ? 'png'
-            : 'jpeg';
+        final ext = image.name.toLowerCase().endsWith('png') ? 'png' : 'jpeg';
         final dataUri = 'data:image/$ext;base64,$base64Image';
 
         setState(() => photoUrl = dataUri);
@@ -693,6 +847,8 @@ class _TeacherScreenState extends State<TeacherScreen> {
 
   InputDecoration _inputDeco(String hint) {
     return InputDecoration(
+      labelText: hint, // <--- ဒီနေရာမှာ labelText လေး ထည့်ပေးလိုက်တာပါ
+      labelStyle: const TextStyle(color: Colors.grey, fontSize: 13),
       hintText: hint,
       hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 12),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -1066,9 +1222,7 @@ class _TeacherScreenState extends State<TeacherScreen> {
                       controller: bioCtrl,
                       enabled: isEditMode,
                       maxLines: 3,
-                      decoration: _inputDeco(
-                        'Freelance Teacher and Corporate Trainer...',
-                      ),
+                      decoration: _inputDeco('ကိုယ်ရေးအကျဉ်း (Bio)'),
                     ),
                   ),
                 ],
@@ -1086,26 +1240,25 @@ class _TeacherScreenState extends State<TeacherScreen> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      initialValue:
-                          [
-                            'Male (ကျား)',
-                            'Female (မ)',
-                            'Male',
-                            'Female',
-                          ].contains(gender)
+                      initialValue: ['Male', 'Female'].contains(gender)
                           ? gender
                           : 'Male',
-                      items: ['Male (ကျား)', 'Female (မ)', 'Male', 'Female']
-                          .map(
-                            (e) => DropdownMenuItem(
-                              value: e,
-                              child: Text(
-                                e,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                          )
-                          .toList(),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'Male',
+                          child: Text(
+                            'Male (ကျား)',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Female',
+                          child: Text(
+                            'Female (မ)',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
                       onChanged: isEditMode
                           ? (v) => setState(() => gender = v!)
                           : null,
@@ -1214,7 +1367,7 @@ class _TeacherScreenState extends State<TeacherScreen> {
                       onChanged: isEditMode
                           ? (v) => setState(() => modeVal = v!)
                           : null,
-                      decoration: _inputDeco('သင်ကြားမည့်ပုံစံ'),
+                      decoration: _inputDeco('နည်းစနစ်'),
                     ),
                   ),
                 ],
@@ -1327,14 +1480,14 @@ class _TeacherScreenState extends State<TeacherScreen> {
               TextFormField(
                 controller: remCtrl,
                 enabled: isEditMode,
-                decoration: _inputDeco('5:00 Pm To 8:00 Pm'),
+                decoration: _inputDeco('ယခုလက်ရှိသင်ကြားနိုင်သည့်အချိန်'),
               ),
               const SizedBox(height: 12),
 
               TextFormField(
                 controller: feeCtrl,
                 enabled: isEditMode,
-                decoration: _inputDeco('လစဉ်ကြေး'),
+                decoration: _inputDeco('လစဉ်ကြေး (ကျပ်)'),
               ),
               const SizedBox(height: 20),
 
@@ -1613,7 +1766,7 @@ class _TeacherScreenState extends State<TeacherScreen> {
                 border: Border.all(color: Colors.grey.shade200),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
+                    color: Colors.black.withValues(alpha: 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -1741,42 +1894,46 @@ class _TeacherScreenState extends State<TeacherScreen> {
                           SizedBox(
                             width: double.infinity,
                             height: 48,
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(
-                                  0xFF2563EB,
-                                ), // Blue color
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
+                            child: FutureBuilder<bool>(
+                              future: checkIfAlreadyApplied(
+                                item['id'],
+                                loggedInTutorId,
                               ),
-                              onPressed: () async {
-                                // လျှောက်ထားမှုကို Database ထဲ ထည့်ရန်
-                                await supabase.from('job_applications').insert({
-                                  'job_id': item['id'],
-                                  'tutor_id': loggedInTutorId,
-                                });
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'အောင်မြင်စွာ လျှောက်ထားပြီးပါပြီ',
-                                      ),
-                                      backgroundColor: Color(0xFF16A34A),
+                              builder: (context, snapshot) {
+                                bool isApplied = snapshot.data ?? false;
+
+                                return ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isApplied
+                                        ? Colors.grey
+                                        : const Color(0xFF2563EB),
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
                                     ),
-                                  );
-                                }
+                                  ),
+                                  onPressed: isApplied
+                                      ? null
+                                      : () => applyJob(
+                                          item['id'],
+                                          loggedInTutorId,
+                                        ),
+                                  icon: const Icon(
+                                    Icons.business_center,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    isApplied
+                                        ? 'လျှောက်ထားပြီးပါပြီ'
+                                        : 'လျှောက်ထားရန် (Apply)',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                );
                               },
-                              icon: const Icon(Icons.business_center, size: 18),
-                              label: const Text(
-                                'လျှောက်ထားရန် (Apply)',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
                             ),
                           ),
                         ],
@@ -1834,15 +1991,16 @@ class _TeacherScreenState extends State<TeacherScreen> {
 
     Future<void> sendChatImage() async {
       try {
-        final result = await FilePicker.platform.pickFiles(
-          type: FileType.image,
+        final ImagePicker picker = ImagePicker();
+        final XFile? image = await picker.pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 25,
         );
-        if (result != null && result.files.single.bytes != null) {
-          final fileBytes = result.files.single.bytes!;
+
+        if (image != null) {
+          final fileBytes = await image.readAsBytes();
           final base64Image = base64Encode(fileBytes);
-          final ext = result.files.single.extension?.toLowerCase() == 'png'
-              ? 'png'
-              : 'jpeg';
+          final ext = image.name.toLowerCase().endsWith('png') ? 'png' : 'jpeg';
           final dataUri = 'data:image/$ext;base64,$base64Image';
 
           await supabase.from('chat_messages').insert({
@@ -1908,7 +2066,7 @@ class _TeacherScreenState extends State<TeacherScreen> {
                     .from('chat_messages')
                     .stream(primaryKey: ['id'])
                     .eq('tutor_id', loggedInTutorId!)
-                    .order('timestamp', ascending: true),
+                    .order('timestamp', ascending: false),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
@@ -1923,6 +2081,7 @@ class _TeacherScreenState extends State<TeacherScreen> {
                     );
                   }
                   return ListView.builder(
+                    reverse: true,
                     padding: const EdgeInsets.all(16),
                     itemCount: msgs.length,
                     itemBuilder: (context, index) {
@@ -3238,7 +3397,7 @@ class _StudentScreenState extends State<StudentScreen> {
             border: Border.all(color: Colors.grey.shade200),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -3270,13 +3429,14 @@ class _StudentScreenState extends State<StudentScreen> {
                     .neq('status', 'connected')
                     .order('id', ascending: false),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData)
+                  if (!snapshot.hasData) {
                     return const Center(
                       child: Padding(
                         padding: EdgeInsets.all(20),
                         child: CircularProgressIndicator(),
                       ),
                     );
+                  }
                   final data = snapshot.data as List;
                   if (data.isEmpty) {
                     return const Padding(
@@ -3459,7 +3619,7 @@ class _StudentScreenState extends State<StudentScreen> {
                                                     DropdownButtonFormField<
                                                       String
                                                     >(
-                                                      value:
+                                                      initialValue:
                                                           [
                                                             "ရန်ကုန်တိုင်းဒေသကြီး",
                                                             "မန္တလေးတိုင်းဒေသကြီး",
@@ -3706,7 +3866,7 @@ class _StudentScreenState extends State<StudentScreen> {
             border: Border.all(color: Colors.grey.shade200),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -4250,8 +4410,8 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
-  void _openPanel(String title, Widget content) {
-    Navigator.push(
+  Future<void> _openPanel(String title, Widget content) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (navContext) => Scaffold(
@@ -4272,7 +4432,10 @@ class _AdminScreenState extends State<AdminScreen> {
             leading: Padding(
               padding: const EdgeInsets.all(8.0),
               child: ElevatedButton.icon(
-                onPressed: () => Navigator.pop(navContext),
+                onPressed: () {
+                  Navigator.pop(navContext);
+                  setState(() {}); // Data အသစ်ပြန်ခေါ်ရန်
+                },
                 icon: const Icon(
                   Icons.arrow_back,
                   color: Colors.white,
@@ -4693,8 +4856,9 @@ class _AdminScreenState extends State<AdminScreen> {
             FutureBuilder(
               future: tutorsFuture,
               builder: (context, snapshot) {
-                if (!snapshot.hasData)
+                if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
+                }
                 final data = snapshot.data as List;
 
                 // Search Filtering
@@ -4739,7 +4903,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         border: Border.all(color: Colors.grey.shade200),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.03),
+                            color: Colors.black.withValues(alpha: 0.03),
                             blurRadius: 8,
                             offset: const Offset(0, 4),
                           ),
@@ -4882,8 +5046,9 @@ class _AdminScreenState extends State<AdminScreen> {
                                                       onPressed: () async {
                                                         if (newPassCtrl.text
                                                             .trim()
-                                                            .isEmpty)
+                                                            .isEmpty) {
                                                           return;
+                                                        }
                                                         await supabase
                                                             .from('tutors')
                                                             .update({
@@ -5110,6 +5275,9 @@ class _AdminScreenState extends State<AdminScreen> {
                                     ),
                                   ),
                                   onPressed: () {
+                                    // Reason ထည့်ရန် Controller လေး တည်ဆောက်ပါမည်
+                                    final reasonCtrl = TextEditingController();
+
                                     showDialog(
                                       context: context,
                                       builder: (ctx) => AlertDialog(
@@ -5117,13 +5285,77 @@ class _AdminScreenState extends State<AdminScreen> {
                                           'Block Tutor',
                                           style: TextStyle(color: Colors.red),
                                         ),
-                                        content: Text(
-                                          '\'${t['name'] ?? t['username']}\' ကို Blacklist သွင်းမည် သေချာပါသလား?',
+                                        content: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '\'${t['name'] ?? t['username']}\' ကို Blacklist သွင်းမည် သေချာပါသလား?',
+                                            ),
+                                            const SizedBox(height: 16),
+                                            // Reason ရိုက်ထည့်ရန် TextField လေး ထည့်လိုက်ပါပြီ
+                                            TextField(
+                                              controller: reasonCtrl,
+                                              decoration: InputDecoration(
+                                                hintText:
+                                                    'အကြောင်းရင်း ထည့်ပါ (Reason)',
+                                                hintStyle: TextStyle(
+                                                  color: Colors.grey.shade400,
+                                                  fontSize: 13,
+                                                ),
+                                                filled: true,
+                                                fillColor: const Color(
+                                                  0xFFF9FAFB,
+                                                ),
+                                                contentPadding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                      vertical: 12,
+                                                    ),
+                                                border: OutlineInputBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  borderSide: BorderSide(
+                                                    color: Colors.grey.shade300,
+                                                  ),
+                                                ),
+                                                enabledBorder:
+                                                    OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      borderSide: BorderSide(
+                                                        color: Colors
+                                                            .grey
+                                                            .shade300,
+                                                      ),
+                                                    ),
+                                                focusedBorder:
+                                                    OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      borderSide:
+                                                          const BorderSide(
+                                                            color: Colors.red,
+                                                          ),
+                                                    ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.pop(ctx),
-                                            child: const Text('Cancel'),
+                                            child: const Text(
+                                              'Cancel',
+                                              style: TextStyle(
+                                                color: Colors.grey,
+                                              ),
+                                            ),
                                           ),
                                           ElevatedButton(
                                             style: ElevatedButton.styleFrom(
@@ -5131,14 +5363,21 @@ class _AdminScreenState extends State<AdminScreen> {
                                               foregroundColor: Colors.white,
                                             ),
                                             onPressed: () async {
+                                              // ဘာမှမရိုက်ထည့်ခဲ့ရင် 'Admin Blocked' လို့ Default ထားပေးမည်
+                                              final reason =
+                                                  reasonCtrl.text.trim().isEmpty
+                                                  ? 'Admin Blocked'
+                                                  : reasonCtrl.text.trim();
+
                                               await supabase
                                                   .from('tutors')
                                                   .update({
                                                     'status': 'blacklisted',
                                                     'reject_reason':
-                                                        'Admin Blocked',
+                                                        reason, // ရိုက်ထည့်လိုက်တဲ့ Reason ဝင်သွားပါမည်
                                                   })
                                                   .eq('id', t['id']);
+
                                               if (context.mounted) {
                                                 Navigator.pop(ctx);
                                                 ScaffoldMessenger.of(
@@ -5195,16 +5434,18 @@ class _AdminScreenState extends State<AdminScreen> {
               .eq('status', 'pending')
               .order('id', ascending: false),
           builder: (context, snapshot) {
-            if (!snapshot.hasData)
+            if (!snapshot.hasData) {
               return const Center(child: CircularProgressIndicator());
+            }
             final data = snapshot.data as List;
-            if (data.isEmpty)
+            if (data.isEmpty) {
               return const Center(
                 child: Text(
                   'စိစစ်ရန် Post မရှိသေးပါ',
                   style: TextStyle(color: Colors.grey),
                 ),
               );
+            }
 
             return Column(
               children: data
@@ -6098,27 +6339,146 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Widget _buildNotificationsPanel() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Column(
-        children: [
-          Icon(Icons.notifications_active, color: Colors.orange, size: 48),
-          SizedBox(height: 12),
-          Text(
-            'System Notifications',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'လက်ရှိတွင် အရေးပေါ် အကြောင်းကြားစာ မရှိသေးပါ',
-            style: TextStyle(color: Colors.grey, fontSize: 13),
-          ),
-        ],
-      ),
+    // ၁။ အချိန် Format ပြောင်းပေးမည့် Helper (ဥပမာ - 8/4/2026, 12:52 PM)
+    String formatDt(String? dtString) {
+      if (dtString == null) return '-';
+      try {
+        final dt = DateTime.parse(dtString).toLocal();
+        final hour = dt.hour > 12
+            ? dt.hour - 12
+            : (dt.hour == 0 ? 12 : dt.hour);
+        final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+        final minute = dt.minute.toString().padLeft(2, '0');
+        return "${dt.month}/${dt.day}/${dt.year}, $hour:$minute $ampm";
+      } catch (e) {
+        return dtString;
+      }
+    }
+
+    // ၂။ Title ပေါ်မူတည်ပြီး ဘေးဘောင်အရောင်လေးတွေ ခွဲပေးမည့် Helper
+    Color getColor(String title) {
+      if (title.contains('အကောင့်သစ်')) {
+        return const Color(0xFFEA580C); // လိမ္မော်ရောင်
+      }
+      if (title.contains('ဆရာခေါ်စာအသစ်')) {
+        return const Color(0xFF2563EB); // အပြာရောင်
+      }
+      if (title.contains('လျှောက်လွှာ')) {
+        return const Color(0xFF16A34A); // အစိမ်းရောင်
+      }
+      if (title.contains('Direct')) {
+        return const Color(0xFF9333EA); // ခရမ်းရောင်
+      }
+      if (title.contains('Profile')) {
+        return const Color(0xFF0D9488); // စိမ်းပြာရောင်
+      }
+      return const Color(0xFF1E3A8A); // အခြားစာများအတွက် Dark Blue
+    }
+
+    // ၃။ UI အပိုင်း
+    return FutureBuilder(
+      future: supabase
+          .from('notifications')
+          .select()
+          .order('timestamp', ascending: false) // အသစ်ဆုံးကို အပေါ်ဆုံးထားမည်
+          .limit(50), // နောက်ဆုံး Noti ၅၀ ခုကိုသာ ပြမည်
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(40),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        final notis = snapshot.data as List<dynamic>? ?? [];
+
+        if (notis.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(40),
+              child: Text(
+                'အချက်ပေးစာ မရှိသေးပါ',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          children: notis.map((item) {
+            final title = item['title']?.toString() ?? 'Notification';
+            final message = item['message']?.toString() ?? '';
+            final timestamp = item['timestamp']?.toString();
+            final color = getColor(title);
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border(
+                  left: BorderSide(
+                    color: color,
+                    width: 4,
+                  ), // ဘေးဘက် ကာလာလိုင်းလေး
+                  top: BorderSide(color: Colors.grey.shade200),
+                  right: BorderSide(color: Colors.grey.shade200),
+                  bottom: BorderSide(color: Colors.grey.shade200),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Color(
+                          0xFF1E3A8A,
+                        ), // ခေါင်းစဉ်ကို Dark Blue ထားမည်
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      message,
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      formatDt(timestamp),
+                      style: TextStyle(
+                        color: Colors.grey.shade400,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 
@@ -6219,11 +6579,16 @@ class _AdminScreenState extends State<AdminScreen> {
                       } catch (e) {
                         // Fallback
                       }
-                      setState(() {});
-                      _openPanel(
+
+                      // ၁။ Chat ထဲသို့ ဝင်မည် (Chat မှ ပြန်ထွက်လာမှ အောက်လိုင်းများ ဆက်အလုပ်လုပ်မည်)
+                      await _openPanel(
                         "${t['name'] ?? 'Tutor'} နှင့် Chat",
                         _buildAdminSingleChat(tId),
                       );
+
+                      // ၂။ ပြန်ထွက်လာချိန်တွင် "1 New" ပျောက်သွားအောင် Refresh လုပ်မည်
+                      setLocalState(() {});
+                      setState(() {});
                     },
                   ),
                 );
@@ -6253,15 +6618,16 @@ class _AdminScreenState extends State<AdminScreen> {
 
     Future<void> sendAdminImage() async {
       try {
-        final result = await FilePicker.platform.pickFiles(
-          type: FileType.image,
+        final ImagePicker picker = ImagePicker();
+        final XFile? image = await picker.pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 25,
         );
-        if (result != null && result.files.single.bytes != null) {
-          final fileBytes = result.files.single.bytes!;
+
+        if (image != null) {
+          final fileBytes = await image.readAsBytes();
           final base64Image = base64Encode(fileBytes);
-          final ext = result.files.single.extension?.toLowerCase() == 'png'
-              ? 'png'
-              : 'jpeg';
+          final ext = image.name.toLowerCase().endsWith('png') ? 'png' : 'jpeg';
           final dataUri = 'data:image/$ext;base64,$base64Image';
 
           await supabase.from('chat_messages').insert({
@@ -6269,7 +6635,7 @@ class _AdminScreenState extends State<AdminScreen> {
             'sender': 'admin',
             'message': '[ဓာတ်ပုံ]',
             'image_data': dataUri,
-            'is_read': false, // ထည့်သွင်းပေးလိုက်ပါသည်
+            'is_read': false,
           });
         }
       } catch (e) {
@@ -6302,13 +6668,14 @@ class _AdminScreenState extends State<AdminScreen> {
                     .from('chat_messages')
                     .stream(primaryKey: ['id'])
                     .eq('tutor_id', tutorId)
-                    .order('timestamp', ascending: true),
+                    .order('timestamp', ascending: false),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
                   }
                   final msgs = snapshot.data as List;
                   return ListView.builder(
+                    reverse: true,
                     padding: const EdgeInsets.all(16),
                     itemCount: msgs.length,
                     itemBuilder: (context, index) {
