@@ -564,12 +564,42 @@ class _TeacherScreenState extends State<TeacherScreen> {
   ];
 
   Future<void> pickAndUploadPhoto() async {
+    // 1. ကင်မရာ သို့မဟုတ် Gallery ရွေးခိုင်းမည့် Bottom Sheet လေး ပြပါမည်
+    final ImageSource? source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Color(0xFF1E3A8A)),
+              title: const Text('ကင်မရာမှ ရိုက်မည်'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.photo_library,
+                color: Color(0xFF1E3A8A),
+              ),
+              title: const Text('ပုံများထဲမှ ရွေးမည်'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // ပုံမရွေးဘဲ မူလအတိုင်း ပိတ်လိုက်ရင် ဘာမှ ဆက်မလုပ်ပါ
+    if (source == null) return;
+
     try {
       final ImagePicker picker = ImagePicker();
-      // ပုံအရွယ်အစားကို ချုံ့ရန် imageQuality: 25 ကို သုံးထားပါသည်
+      // ရွေးချယ်လိုက်သော source (camera သို့မဟုတ် gallery) အလိုက် ပုံယူမည်
       final XFile? image = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 25,
+        source: source,
+        imageQuality: 25, // OOM Crash မဖြစ်အောင် Quality ချုံ့ထားပါသည်
       );
 
       if (image != null) {
