@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -600,6 +599,7 @@ class _TeacherScreenState extends State<TeacherScreen> {
       final XFile? image = await picker.pickImage(
         source: source,
         imageQuality: 25, // OOM Crash မဖြစ်အောင် Quality ချုံ့ထားပါသည်
+        maxWidth: 300,
       );
 
       if (image != null) {
@@ -2025,6 +2025,7 @@ class _TeacherScreenState extends State<TeacherScreen> {
         final XFile? image = await picker.pickImage(
           source: ImageSource.gallery,
           imageQuality: 25,
+          maxWidth: 300,
         );
 
         if (image != null) {
@@ -6652,6 +6653,7 @@ class _AdminScreenState extends State<AdminScreen> {
         final XFile? image = await picker.pickImage(
           source: ImageSource.gallery,
           imageQuality: 25,
+          maxWidth: 300,
         );
 
         if (image != null) {
